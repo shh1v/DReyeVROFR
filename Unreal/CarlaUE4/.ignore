@@ -1,0 +1,13 @@
+.vscode
+Content
+DerivedDataCache
+Intermediate
+Saved
+Script
+Plugins/Carla/CarlaDependencies
+Plugins/Carla/Content
+Plugins/Carla/Intermediate
+Plugins/CarlaExporter/Intermediate
+Plugins/LogitechWheelPlugin/Doc
+Plugins/LogitechWheelPlugin/Intermediate
+Plugins/LogitechWheelPlugin/Logitech
