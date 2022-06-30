@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include <functional>
 #include "CarlaRecorderInfo.h"
@@ -92,10 +94,24 @@ public:
   // tick for the replayer
   void Tick(float Time);
 
+  // DReyeVR replayer functions
+  void PlayPause();
+  void Restart();
+  void Advance(const float Amnt);
+  void IncrTimeFactor(const float Amnt_s);
+
+  void SetSyncMode(bool bSyncModeIn)
+  {
+    bReplaySync = bSyncModeIn;
+    if (bReplaySync)
+      UE_LOG(LogTemp, Warning, TEXT("Replay operating in frame-wise sync mode"));
+  }
+  
 private:
 
   bool Enabled;
   bool bReplaySensors = false;
+  bool Paused = false;
   UCarlaEpisode *Episode = nullptr;
   // binary file reader
   std::ifstream File;
@@ -146,6 +162,28 @@ private:
 
   void ProcessLightVehicle(void);
   void ProcessLightScene(void);
+
+  void ProcessWeather(void);
+
+  // DReyeVR recordings
+  template <typename T> void ProcessDReyeVRData(double Per, double DeltaTime, bool bShouldBeOnlyOne);
+  std::unordered_set<std::string> Visited = {};
+
+  // For restarting the recording with the same params
+  struct LastReplayStruct
+  {
+    std::string Filename = "None";
+    double TimeStart = 0;
+    double Duration = 0;
+    uint32_t ThisFollowId = 0;
+  };
+  LastReplayStruct LastReplay;
+
+  bool bReplaySync = false;
+  std::vector<double> FrameStartTimes;
+  size_t SyncCurrentFrameId = 0;
+  void GetFrameStartTimes();
+  void ProcessFrameByFrame();
 
   // positions
   void UpdatePositions(double Per, double DeltaTime);
