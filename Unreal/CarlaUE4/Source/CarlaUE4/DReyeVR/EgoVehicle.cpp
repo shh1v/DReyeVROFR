@@ -35,6 +35,9 @@ AEgoVehicle::AEgoVehicle(const FObjectInitializer &ObjectInitializer) : Super(Ob
     // Initialize mirrors
     ConstructMirrors();
 
+    // Retrive text from local files to display on HUD
+    RetriveText();
+
     // Initialize text render components
     ConstructDashText();
 
@@ -50,7 +53,8 @@ void AEgoVehicle::ReadConfigVariables()
     ReadConfigValue("EgoVehicle", "EnableTurnSignalAction", bEnableTurnSignalAction);
     ReadConfigValue("EgoVehicle", "TurnSignalDuration", TurnSignalDuration);
     // mirrors
-    auto InitMirrorParams = [](const FString &Name, struct MirrorParams &Params) {
+    auto InitMirrorParams = [](const FString &Name, struct MirrorParams &Params)
+    {
         Params.Name = Name;
         ReadConfigValue("Mirrors", Params.Name + "MirrorEnabled", Params.Enabled);
         ReadConfigValue("Mirrors", Params.Name + "MirrorPos", Params.MirrorPos);
@@ -496,6 +500,26 @@ void AEgoVehicle::ConstructDashText() // dashboard text (speedometer, turn signa
     GearShifter->SetWorldSize(10); // scale the font with this
     GearShifter->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextCenter);
     GearShifter->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
+
+    // Constructing User-Interface
+    ConstructInterface();
+}
+
+void AEgoVehicle::RetriveText()
+{
+    FString PathToTextFile = FPaths::ProjectContentDir() / TEXT("TextFiles/Text1.txt");
+    TArray<FString> Paragraphs;
+    FFileHelper::LoadFileToStringArray(Paragraphs, *PathToTextFile);
+    for (FString Sentence : Paragraphs)
+    {
+        TArray<FString> Words;
+        Sentence.ParseIntoArray(Words, TEXT(" "), true);
+        TextWordsArray.Append(Words);
+    }
+    for (FString word : TextWordsArray)
+    {
+        UE_LOG(LogTemp, Display, TEXT("DEBUG-WORD: %s"), *word);
+    }
 }
 
 void AEgoVehicle::UpdateDash()
@@ -552,8 +576,109 @@ void AEgoVehicle::UpdateDash()
         GearShifter->SetText(FText::FromString("R"));
     else
         GearShifter->SetText(FText::FromString("D"));
+
+    // Updating text in the HeadsUpDisplay
+    if (bRSVP)
+        RSVP();
+    else
+        STP();
 }
 
+void AEgoVehicle::STP()
+{
+    if (bIsFirst)
+    {
+        for (int32 i = 0; i < 6; i++)
+            CurrentLines.Emplace(GenerateSentence());
+        SetTextSTP();
+        FutureTimeStamp = World -> GetTimeSeconds() + LineShiftInterval + ExtraPause;
+        bIsFirst = false;
+    }
+    else if (FutureTimeStamp <= World -> GetTimeSeconds())
+    {
+        // Shifting a line up i.e., removing first line and appending the next line;
+        CurrentLines.RemoveAt(0);
+        CurrentLines.Emplace(GenerateSentence());
+        SetTextSTP();
+        FutureTimeStamp += LineShiftInterval;
+    }
+}
+
+void AEgoVehicle::RSVP()
+{
+    if (bIsFirst) {
+        FString Word = TextWordsArray[EndIndex++];
+        TextDisplay -> SetText(Word);
+        FutureTimeStamp = World -> GetTimeSeconds() + NextWordInterval + ExtraPause;
+        bIsFirst = false;
+    } else if (FutureTimeStamp <= World -> GetTimeSeconds()) {
+        FString Word = TextWordsArray[EndIndex++];
+        TextDisplay -> SetText(Word);
+        FutureTimeStamp += NextWordInterval;
+    }
+}
+
+FString AEgoVehicle::GenerateSentence()
+{
+    int32 CharacterSum = 0;
+    FString Sentence = TEXT("");
+    while (EndIndex < TextWordsArray.Num()) {
+        FString Word = TextWordsArray[EndIndex];
+        CharacterSum += Word.Len();
+        if (CharacterSum >= CharacterLimit)
+            break;
+        Sentence.Append(Word);
+        Sentence.Append(TEXT(" "));
+        EndIndex += 1;
+    }
+    Sentence.Append(TEXT("\n"));
+    return Sentence;
+}
+void AEgoVehicle::SetTextSTP()
+{
+    FString TextToSet = TEXT("");
+    for (FString line : CurrentLines)
+        TextToSet.Append(line);
+    TextDisplay -> SetText(TextToSet);
+}
+void AEgoVehicle::ConstructInterface() {
+    // Creating a Heads-Up display
+    HUD = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HUD"));
+    HUD-> AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+
+    // Creating a text display interface
+    TextDisplay = CreateDefaultSubobject<UTextRenderComponent>(TEXT("TextDisplay"));
+    TextDisplay->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+    TextDisplay->SetTextRenderColor(FColor::Black);
+    TextDisplay->SetXScale(1.f);
+    TextDisplay->SetYScale(1.f);
+
+    // Settings conditional to Text presentation technique.
+    if (bRSVP) {
+        HUD->SetRelativeLocation(DashboardLocnInVehicle + FVector(5, -45.f, 50.f));
+        FString PathToMesh = TEXT("StaticMesh'/Game/DReyeVROFR/StaticMeshes/SM_HUD_V3.SM_HUD_V3'");
+        const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshObj(*PathToMesh);
+        HUD->SetStaticMesh(MeshObj.Object);
+        
+        TextDisplay->SetRelativeLocation(DashboardLocnInVehicle + FVector(-7, -45, 46.f));
+        TextDisplay->SetRelativeRotation(FRotator(-32.f, 180.f, 0.f)); // need to flip it to get the text in driver POV
+        TextDisplay->SetWorldSize(7); // scale the font with this
+        TextDisplay->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextCenter);
+        TextDisplay->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
+    }
+    else {
+        HUD->SetRelativeLocation(DashboardLocnInVehicle + FVector(5, -45.f, 50.f));
+        FString PathToMesh = TEXT("StaticMesh'/Game/DReyeVROFR/StaticMeshes/SM_HUD_V2.SM_HUD_V2'");
+        const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshObj(*PathToMesh);
+        HUD->SetStaticMesh(MeshObj.Object);
+        
+        TextDisplay->SetRelativeLocation(DashboardLocnInVehicle + FVector(-7, -66.5f, 59.f));
+        TextDisplay->SetRelativeRotation(FRotator(-32.f, 180.f, 0.f)); // need to flip it to get the text in driver POV
+        TextDisplay->SetWorldSize(4); // scale the font with this
+        TextDisplay->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextTop);
+        TextDisplay->SetHorizontalAlignment(EHorizTextAligment::EHTA_Left);
+    }
+}
 /// ========================================== ///
 /// -----------------:WHEEL:------------------ ///
 /// ========================================== ///

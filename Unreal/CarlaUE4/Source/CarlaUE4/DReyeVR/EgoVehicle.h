@@ -198,10 +198,45 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     float TurnSignalDuration; // time in seconds
     UPROPERTY(Category = "Dash", EditDefaultsOnly, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
     class UTextRenderComponent *GearShifter;
-    void UpdateDash();
+    void UpdateDash(); // This method will either call RSVP or STD method
     FVector DashboardLocnInVehicle{110, 0, 105}; // can change via params
     bool bUseMPH;
     float SpeedometerScale; // scale from CM/s to MPH or KPH depending on bUseMPH
+
+    // Get text from local text file
+    void RetriveText();
+    TArray<FString> TextWordsArray;
+
+    // Common variables/methods for STP and RSVP techniques
+    const float ExtraPause = 1.f;
+    class UTextRenderComponent *TextDisplay;
+    class UStaticMeshComponent *HUD;
+    void ConstructInterface();
+    bool bRSVP = true; // WARNING: This should ONLY be modified before starting the program (for now)
+    bool bIsFirst = true;
+    int32 EndIndex = 0; // Index of the first word to start a new sentence.
+    float FutureTimeStamp;
+    
+    // Scrolling Text Display (STP)
+    /*******************************************
+     * Total Words per minute = 250
+     * Each line has 4 words.
+     * Total lines = (250/4) = UPPER(62.5) = 63
+     * Initial lines = 6
+     * Left out lines to display = 63 - 6 = 57
+     * so, in the 60 seconds, one has to display 57 more lines
+     * the display will shift one line in (57/60) seconds = 0.95 seconds.
+     * *******************************************/
+    const int32 CharacterLimit = 23;
+    const float LineShiftInterval = 0.95f;
+    TArray<FString> CurrentLines; // This will store the current
+    FString GenerateSentence();
+    void STP(); // Will be called in UpdateDash()
+    void SetTextSTP(); // Will generate a paragraph from CurrentLines array and set text on HUD.
+
+    // Rapid Serial Visual Presentation Technique
+    const float NextWordInterval = 0.24f;
+    void RSVP();
 
     ////////////////:STEERINGWHEEL:////////////////
     void ConstructSteeringWheel(); // needs to be called in the constructor
