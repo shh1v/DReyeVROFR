@@ -203,39 +203,43 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     bool bUseMPH;
     float SpeedometerScale; // scale from CM/s to MPH or KPH depending on bUseMPH
 
-    // Get text from local text file
+    // Get text from local text and settings file
     void RetriveText();
+    void ReadSettingsFile();
     TArray<FString> TextWordsArray;
 
     // Common variables/methods for STP and RSVP techniques
     const float ExtraPause = 1.f;
+    FString PathToTextFile = FPaths::ProjectContentDir() / TEXT("TextFiles/Text1.txt");
     class UTextRenderComponent *TextDisplay;
     class UStaticMeshComponent *HUD;
     void ConstructInterface();
-    bool bRSVP = true; // WARNING: This should ONLY be modified before starting the program (for now)
+    void EnableTextToSpeech();
+    bool bRSVP; // WARNING: This should ONLY be modified before starting the program (for now)
+    bool bTTS = false; // WARNING: This should ONLY be modified before starting the program (for now)
     bool bIsFirst = true;
     int32 EndIndex = 0; // Index of the first word to start a new sentence.
     float FutureTimeStamp;
     
     // Scrolling Text Display (STP)
     /*******************************************
-     * Total Words per minute = 250
+     * Total Words per minute = 200
      * Each line has 4 words.
-     * Total lines = (250/4) = UPPER(62.5) = 63
+     * Total lines = (200/4) = UPPER(50) = 50
      * Initial lines = 6
-     * Left out lines to display = 63 - 6 = 57
-     * so, in the 60 seconds, one has to display 57 more lines
-     * the display will shift one line in (57/60) seconds = 0.95 seconds.
+     * Left out lines to display = 50 - 6 = 44
+     * so, in the 60 seconds, one has to display 44 more lines
+     * the display will shift one line in (44/60) seconds = 0.7333 seconds.
      * *******************************************/
     const int32 CharacterLimit = 23;
-    const float LineShiftInterval = 0.95f;
+    const float LineShiftInterval = 0.7333f;
     TArray<FString> CurrentLines; // This will store the current
     FString GenerateSentence();
     void STP(); // Will be called in UpdateDash()
     void SetTextSTP(); // Will generate a paragraph from CurrentLines array and set text on HUD.
 
     // Rapid Serial Visual Presentation Technique
-    const float NextWordInterval = 0.24f;
+    const float NextWordInterval = 0.3f;
     void RSVP();
 
     ////////////////:STEERINGWHEEL:////////////////

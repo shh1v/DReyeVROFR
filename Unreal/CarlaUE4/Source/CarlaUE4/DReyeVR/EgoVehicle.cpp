@@ -11,6 +11,7 @@
 #include "Kismet/KismetSystemLibrary.h"             // PrintString, QuitGame
 #include "Math/Rotator.h"                           // RotateVector, Clamp
 #include "Math/UnrealMathUtility.h"                 // Clamp
+#include <windows.h>                                // To enable working with Windows CLI
 
 #include <algorithm>
 
@@ -38,8 +39,15 @@ AEgoVehicle::AEgoVehicle(const FObjectInitializer &ObjectInitializer) : Super(Ob
     // Retrive text from local files to display on HUD
     RetriveText();
 
+    // Reading Settings file
+    ReadSettingsFile();
+    
     // Initialize text render components
     ConstructDashText();
+
+    // Enable Text-to-Speech if wanted
+    if (bTTS)
+        EnableTextToSpeech();
 
     // Initialize the steering wheel
     ConstructSteeringWheel();
@@ -501,7 +509,7 @@ void AEgoVehicle::ConstructDashText() // dashboard text (speedometer, turn signa
     GearShifter->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextCenter);
     GearShifter->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
 
-    // Constructing User-Interface
+    //  Constructing User-Interface
     ConstructInterface();
 }
 
@@ -515,10 +523,6 @@ void AEgoVehicle::RetriveText()
         TArray<FString> Words;
         Sentence.ParseIntoArray(Words, TEXT(" "), true);
         TextWordsArray.Append(Words);
-    }
-    for (FString word : TextWordsArray)
-    {
-        UE_LOG(LogTemp, Display, TEXT("DEBUG-WORD: %s"), *word);
     }
 }
 
@@ -576,12 +580,13 @@ void AEgoVehicle::UpdateDash()
         GearShifter->SetText(FText::FromString("R"));
     else
         GearShifter->SetText(FText::FromString("D"));
+    
 
     // Updating text in the HeadsUpDisplay
-    if (bRSVP)
-        RSVP();
-    else
-        STP();
+    // if (bRSVP)
+    //     RSVP();
+    // else
+    //     STP();
 }
 
 void AEgoVehicle::STP()
@@ -677,6 +682,30 @@ void AEgoVehicle::ConstructInterface() {
         TextDisplay->SetWorldSize(4); // scale the font with this
         TextDisplay->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextTop);
         TextDisplay->SetHorizontalAlignment(EHorizTextAligment::EHTA_Left);
+    }
+}
+
+void AEgoVehicle::EnableTextToSpeech() {
+    const FString PathToESpeak = FPaths::ProjectContentDir() / TEXT("TTSSoftware/espeak.exe");
+    FString CompleteText = TEXT("");
+    for (FString Word : TextWordsArray) {
+        CompleteText.Append(Word);
+        CompleteText.Append(TEXT(" "));
+    }
+    FString command = FString::Printf(TEXT("%s -f %s -s 200 -ven+m7 -a 200 -p 30"), *PathToESpeak, *PathToTextFile);
+    std::string CommandInStdString = TCHAR_TO_UTF8(*command);
+    const char* CharCommand = CommandInStdString.c_str();
+    system(CharCommand);
+}
+
+void AEgoVehicle::ReadSettingsFile() {
+    const FString RSVPSettings = FPaths::ProjectContentDir() / TEXT("Settings/rsvp.txt");
+    FString result;
+    FFileHelper::LoadFileToString(result, *RSVPSettings);
+    if(result.Equals("true") || result.Equals("True") || result.Equals("TRUE")) {
+        bRSVP = true;
+    } else {
+        bRSVP = false;
     }
 }
 /// ========================================== ///
