@@ -11,7 +11,7 @@
 #include "Kismet/KismetSystemLibrary.h"             // PrintString, QuitGame
 #include "Math/Rotator.h"                           // RotateVector, Clamp
 #include "Math/UnrealMathUtility.h"                 // Clamp
-#include <windows.h>                                // To enable working with Windows CLI
+#include "Kismet/KismetStringLibrary.h"             // GetSubString
 
 #include <algorithm>
 
@@ -39,7 +39,7 @@ AEgoVehicle::AEgoVehicle(const FObjectInitializer &ObjectInitializer) : Super(Ob
     // Retrive text from local files to display on HUD
     RetriveText();
 
-    // Reading Settings file
+    // Reading Settings file to determine the behavior of the Heads-Up Display
     ReadSettingsFile();
     
     // Initialize text render components
@@ -515,7 +515,7 @@ void AEgoVehicle::ConstructDashText() // dashboard text (speedometer, turn signa
 
 void AEgoVehicle::RetriveText()
 {
-    FString PathToTextFile = FPaths::ProjectContentDir() / TEXT("TextFiles/Text1.txt");
+    FString PathToTextFile = FPaths::ProjectContentDir() / TEXT("ConfigFiles/Text1.txt");
     TArray<FString> Paragraphs;
     FFileHelper::LoadFileToStringArray(Paragraphs, *PathToTextFile);
     for (FString Sentence : Paragraphs)
@@ -583,10 +583,10 @@ void AEgoVehicle::UpdateDash()
     
 
     // Updating text in the HeadsUpDisplay
-    // if (bRSVP)
-    //     RSVP();
-    // else
-    //     STP();
+    if (bRSVP)
+        RSVP();
+    else
+        STP();
 }
 
 void AEgoVehicle::STP()
@@ -686,6 +686,7 @@ void AEgoVehicle::ConstructInterface() {
 }
 
 void AEgoVehicle::EnableTextToSpeech() {
+    // Have to use espeak API. This will not work. Shit code.
     const FString PathToESpeak = FPaths::ProjectContentDir() / TEXT("TTSSoftware/espeak.exe");
     FString CompleteText = TEXT("");
     for (FString Word : TextWordsArray) {
@@ -699,13 +700,34 @@ void AEgoVehicle::EnableTextToSpeech() {
 }
 
 void AEgoVehicle::ReadSettingsFile() {
-    const FString RSVPSettings = FPaths::ProjectContentDir() / TEXT("Settings/rsvp.txt");
-    FString result;
-    FFileHelper::LoadFileToString(result, *RSVPSettings);
-    if(result.Equals("true") || result.Equals("True") || result.Equals("TRUE")) {
-        bRSVP = true;
-    } else {
+    const FString RSVPSettings = FPaths::ProjectContentDir() / TEXT("ConfigFiles/config.txt");
+    FString Result;
+    FFileHelper::LoadFileToString(Result, *RSVPSettings);
+
+    // Reading file: RSVP behaviour should be enabled or not
+    FString RSVP = UKismetStringLibrary::GetSubstring(Result, Result.Find(TEXT("RSVP:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+6, 1);
+    FString WPM = UKismetStringLibrary::GetSubstring(Result, Result.Find(TEXT("WPM:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+5, 3);
+    FString TTS = UKismetStringLibrary::GetSubstring(Result, Result.FString::Find(TEXT("TTS:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+5, 1);
+
+    if(RSVP.Equals("0")) {
         bRSVP = false;
+    } else {
+        bRSVP = true;
+    }
+
+    if(TTS.Equals("0")) {
+        bTTS = false;
+    } else {
+        bTTS = true;
+    }
+    SetWPM(UKismetStringLibrary::Conv_StringToInt(WPM));
+}
+
+void AEgoVehicle::SetWPM(int32 WPM) {
+    if (bRSVP) {
+        NextWordInterval = 60./WPM;
+    } else {
+        LineShiftInterval = (ceil(WPM/4.0) - 6)/60;
     }
 }
 /// ========================================== ///
