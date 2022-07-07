@@ -19,7 +19,6 @@
 #include "WheeledVehicle.h"                           // VehicleMovementComponent
 #include <stdio.h>
 #include <vector>
-
 #include "EgoVehicle.generated.h"
 
 class ADReyeVRLevel;
@@ -207,6 +206,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     void RetriveText();
     void ReadSettingsFile();
     TArray<FString> TextWordsArray;
+    std::string TextStdString;
     void SetWPM(int32 WPM);
 
     // Common variables/methods for STP and RSVP techniques
@@ -216,6 +216,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     class UStaticMeshComponent *HUD;
     void ConstructInterface();
     void EnableTextToSpeech();
+    bool bThreadInit = false;
     bool bRSVP = false; // WARNING: This should ONLY be modified before starting the program (for now)
     bool bTTS = false; // WARNING: This should ONLY be modified before starting the program (for now)
     bool bIsFirst = true;
@@ -234,7 +235,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
      * *******************************************/
     const int32 CharacterLimit = 23;
     float LineShiftInterval = 0.7333f;
-    TArray<FString> CurrentLines; // This will store the current
+    TArray<FString> CurrentLines; // This will store the current lines that are displayed on HUD.
     FString GenerateSentence();
     void STP(); // Will be called in UpdateDash()
     void SetTextSTP(); // Will generate a paragraph from CurrentLines array and set text on HUD.

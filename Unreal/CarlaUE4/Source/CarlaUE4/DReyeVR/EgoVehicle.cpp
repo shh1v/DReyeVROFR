@@ -12,8 +12,8 @@
 #include "Math/Rotator.h"                           // RotateVector, Clamp
 #include "Math/UnrealMathUtility.h"                 // Clamp
 #include "Kismet/KismetStringLibrary.h"             // GetSubString
-
 #include <algorithm>
+#include "TTSThread.h"
 
 // Sets default values
 AEgoVehicle::AEgoVehicle(const FObjectInitializer &ObjectInitializer) : Super(ObjectInitializer)
@@ -44,10 +44,6 @@ AEgoVehicle::AEgoVehicle(const FObjectInitializer &ObjectInitializer) : Super(Ob
     
     // Initialize text render components
     ConstructDashText();
-
-    // Enable Text-to-Speech if wanted
-    if (bTTS)
-        EnableTextToSpeech();
 
     // Initialize the steering wheel
     ConstructSteeringWheel();
@@ -518,6 +514,8 @@ void AEgoVehicle::RetriveText()
     FString PathToTextFile = FPaths::ProjectContentDir() / TEXT("ConfigFiles/Text1.txt");
     TArray<FString> Paragraphs;
     FFileHelper::LoadFileToStringArray(Paragraphs, *PathToTextFile);
+    FString TextFString = FString::Join(Paragraphs, TEXT(""));
+    TextStdString = std::string(TCHAR_TO_UTF8(*TextFString));
     for (FString Sentence : Paragraphs)
     {
         TArray<FString> Words;
@@ -581,7 +579,13 @@ void AEgoVehicle::UpdateDash()
     else
         GearShifter->SetText(FText::FromString("D"));
     
-
+    // Enable Text-to-Speech if wanted and if not enabled yet
+    if (bTTS) {
+        if (!bThreadInit) {
+            EnableTextToSpeech();
+            bThreadInit = true;
+        }
+    }
     // Updating text in the HeadsUpDisplay
     if (bRSVP)
         RSVP();
@@ -650,6 +654,7 @@ void AEgoVehicle::ConstructInterface() {
     // Creating a Heads-Up display
     HUD = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HUD"));
     HUD-> AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+    HUD->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     // Creating a text display interface
     TextDisplay = CreateDefaultSubobject<UTextRenderComponent>(TEXT("TextDisplay"));
@@ -686,17 +691,8 @@ void AEgoVehicle::ConstructInterface() {
 }
 
 void AEgoVehicle::EnableTextToSpeech() {
-    // Have to use espeak API. This will not work. Shit code.
-    const FString PathToESpeak = FPaths::ProjectContentDir() / TEXT("TTSSoftware/espeak.exe");
-    FString CompleteText = TEXT("");
-    for (FString Word : TextWordsArray) {
-        CompleteText.Append(Word);
-        CompleteText.Append(TEXT(" "));
-    }
-    FString command = FString::Printf(TEXT("%s -f %s -s 200 -ven+m7 -a 200 -p 30"), *PathToESpeak, *PathToTextFile);
-    std::string CommandInStdString = TCHAR_TO_UTF8(*command);
-    const char* CharCommand = CommandInStdString.c_str();
-    system(CharCommand);
+    /* Initialize TTS thread here. */
+    FTTSThread* TTSThread = new FTTSThread(TextStdString);
 }
 
 void AEgoVehicle::ReadSettingsFile() {
