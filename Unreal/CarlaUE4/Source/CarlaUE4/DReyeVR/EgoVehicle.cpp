@@ -13,7 +13,8 @@
 #include "Math/UnrealMathUtility.h"                 // Clamp
 #include "Kismet/KismetStringLibrary.h"             // GetSubString
 #include <algorithm>
-#include "TTSThread.h"
+#include "TTSThread.h"                              // Text to Speech Thread
+#include <math.h>                                   // Natural log
 
 // Sets default values
 AEgoVehicle::AEgoVehicle(const FObjectInitializer &ObjectInitializer) : Super(ObjectInitializer)
@@ -691,8 +692,7 @@ void AEgoVehicle::ConstructInterface() {
 }
 
 void AEgoVehicle::EnableTextToSpeech() {
-    /* Initialize TTS thread here. */
-    FTTSThread* TTSThread = new FTTSThread(TextStdString);
+    FTTSThread* TTSThread = new FTTSThread(TextStdString, WPM);
 }
 
 void AEgoVehicle::ReadSettingsFile() {
@@ -702,7 +702,7 @@ void AEgoVehicle::ReadSettingsFile() {
 
     // Reading file: RSVP behaviour should be enabled or not
     FString RSVP = UKismetStringLibrary::GetSubstring(Result, Result.Find(TEXT("RSVP:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+6, 1);
-    FString WPM = UKismetStringLibrary::GetSubstring(Result, Result.Find(TEXT("WPM:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+5, 3);
+    FString WPMString = UKismetStringLibrary::GetSubstring(Result, Result.Find(TEXT("WPM:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+5, 3);
     FString TTS = UKismetStringLibrary::GetSubstring(Result, Result.FString::Find(TEXT("TTS:"), ESearchCase::IgnoreCase, ESearchDir::FromStart)+5, 1);
 
     if(RSVP.Equals("0")) {
@@ -716,7 +716,8 @@ void AEgoVehicle::ReadSettingsFile() {
     } else {
         bTTS = true;
     }
-    SetWPM(UKismetStringLibrary::Conv_StringToInt(WPM));
+    WPM = UKismetStringLibrary::Conv_StringToInt(WPMString);
+    SetWPM(WPM);
 }
 
 void AEgoVehicle::SetWPM(int32 WPM) {

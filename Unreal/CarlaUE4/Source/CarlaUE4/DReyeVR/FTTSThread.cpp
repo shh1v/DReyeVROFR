@@ -1,19 +1,19 @@
 // Copyright notice
 #include "TTSThread.h" // Change this to reference the header file above
-
+#include <cmath>
 
 #pragma region Main Thread Code
 // This code will be run on the thread that invoked this thread (i.e. game thread)
 
 std::string* TextStdStringPtr;
 
-FTTSThread::FTTSThread(std::string& TextStdString)
+FTTSThread::FTTSThread(std::string& TextStdString, int32 WPM)
 {
 	// Constructs the actual thread object. It will begin execution immediately
 	// If you've passed in any inputs, set them up before calling this.
-  TextStdStringPtr = &TextStdString;
+	this->WPM = WPM;
+	TextStdStringPtr = &TextStdString;
 	Thread = FRunnableThread::Create(this, TEXT("TTS Thread"));
-    UE_LOG(LogTemp, Warning, TEXT("TTS Thread: Constructor"));
 }
 
 
@@ -34,16 +34,6 @@ FTTSThread::~FTTSThread()
 #pragma endregion
 // The code below will run on the new thread.
 
-
-bool FTTSThread::Init()
-{
-	UE_LOG(LogTemp, Warning, TEXT("TTS Thread: Initialized"))
-
-	// Return false if you want to abort the thread
-	return true;
-}
-
-
 uint32 FTTSThread::Run()
 {
   UE_LOG(LogTemp, Warning, TEXT("TTS Thread: Running"));
@@ -59,10 +49,33 @@ uint32 FTTSThread::Run()
     Anything multi-byte will fail miserably, including UTF-8. However, we only use ASCII in our case.*/
     std::wstring stemp = std::wstring((*TextStdStringPtr).begin(), (*TextStdStringPtr).end());
     LPCWSTR TextLString = stemp.c_str();
-    hr = pVoice->Speak(TextLString, SPF_IS_XML, NULL);
+    pVoice->SetRate(ComputeAbsSpeed(WPM));
+    hr = pVoice->Speak(TextLString, SPF_DEFAULT, NULL);
     pVoice->Release();
     pVoice = NULL;
   }
   ::CoUninitialize();
+  UE_LOG(LogTemp, Warning, TEXT("TTS Thread: TTS task complete"));
   return TRUE;
+}
+
+int32 FTTSThread::ComputeAbsSpeed(int32 WPM)
+{
+      float TTSAbsSpeed = 0.f;
+      if (WPM > TTS_DEFAULT_SPEED)
+      {
+          TTSAbsSpeed = log(WPM/TTS_DEFAULT_SPEED)*10/log(3);
+      }
+      else if (WPM < TTS_DEFAULT_SPEED)
+      {
+          TTSAbsSpeed = log(TTS_DEFAULT_SPEED/WPM)*10/log(3);
+      }
+      /* Adjusting WPM based on reading task speed. */
+      TTSAbsSpeed *= TTS_WPM_ADJUST;
+      /* Ensuring that the AbsSpeed in [-10, 10] */
+      TTSAbsSpeed = (TTSAbsSpeed > 10.f) ? 10.f : TTSAbsSpeed;
+      TTSAbsSpeed = (TTSAbsSpeed < -10.f) ? -10.f : TTSAbsSpeed;
+
+      UE_LOG(LogTemp, Display, TEXT("AbsSpeed: %d"), round(TTSAbsSpeed));
+      return round(TTSAbsSpeed);
 }

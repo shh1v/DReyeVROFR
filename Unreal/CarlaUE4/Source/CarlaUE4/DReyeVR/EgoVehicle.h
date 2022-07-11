@@ -206,7 +206,6 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     void RetriveText();
     void ReadSettingsFile();
     TArray<FString> TextWordsArray;
-    std::string TextStdString;
     void SetWPM(int32 WPM);
 
     // Common variables/methods for STP and RSVP techniques
@@ -218,11 +217,16 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     void EnableTextToSpeech();
     bool bThreadInit = false;
     bool bRSVP = false; // WARNING: This should ONLY be modified before starting the program (for now)
-    bool bTTS = false; // WARNING: This should ONLY be modified before starting the program (for now)
     bool bIsFirst = true;
     int32 EndIndex = 0; // Index of the first word to start a new sentence.
     float FutureTimeStamp;
-    
+
+    // Text to Speech
+    bool bTTS = false; // WARNING: This should ONLY be modified before starting the program (for now)
+    int32 WPM; // Retrived from the settings file. Default value may be set.
+    std::string TextStdString;
+
+
     // Scrolling Text Display (STP)
     /*******************************************
      * Total Words per minute = 200
