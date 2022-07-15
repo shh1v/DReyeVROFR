@@ -8,22 +8,11 @@
 
 """Example script to generate traffic in the simulation"""
 
-import glob
-import os
-import sys
 import time
-
-try:
-    sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
-        sys.version_info.major,
-        sys.version_info.minor,
-        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
-except IndexError:
-    pass
-
 import carla
 
 from carla import VehicleLightState as vls
+from DReyeVR_utils import find_ego_vehicle
 
 import argparse
 import logging
@@ -52,104 +41,8 @@ def get_actor_blueprints(world, filter, generation):
     except:
         print("   Warning! Actor Generation is not valid. No actor will be spawned.")
         return []
-
 def main():
-    argparser = argparse.ArgumentParser(
-        description=__doc__)
-    argparser.add_argument(
-        '--host',
-        metavar='H',
-        default='127.0.0.1',
-        help='IP of the host server (default: 127.0.0.1)')
-    argparser.add_argument(
-        '-p', '--port',
-        metavar='P',
-        default=2000,
-        type=int,
-        help='TCP port to listen to (default: 2000)')
-    argparser.add_argument(
-        '-n', '--number-of-vehicles',
-        metavar='N',
-        default=30,
-        type=int,
-        help='Number of vehicles (default: 30)')
-    argparser.add_argument(
-        '-w', '--number-of-walkers',
-        metavar='W',
-        default=10,
-        type=int,
-        help='Number of walkers (default: 10)')
-    argparser.add_argument(
-        '--safe',
-        action='store_true',
-        help='Avoid spawning vehicles prone to accidents')
-    argparser.add_argument(
-        '--filterv',
-        metavar='PATTERN',
-        default='vehicle.*',
-        help='Filter vehicle model (default: "vehicle.*")')
-    argparser.add_argument(
-        '--generationv',
-        metavar='G',
-        default='All',
-        help='restrict to certain vehicle generation (values: "1","2","All" - default: "All")')
-    argparser.add_argument(
-        '--filterw',
-        metavar='PATTERN',
-        default='walker.pedestrian.*',
-        help='Filter pedestrian type (default: "walker.pedestrian.*")')
-    argparser.add_argument(
-        '--generationw',
-        metavar='G',
-        default='2',
-        help='restrict to certain pedestrian generation (values: "1","2","All" - default: "2")')
-    argparser.add_argument(
-        '--tm-port',
-        metavar='P',
-        default=8000,
-        type=int,
-        help='Port to communicate with TM (default: 8000)')
-    argparser.add_argument(
-        '--asynch',
-        action='store_true',
-        help='Activate asynchronous mode execution')
-    argparser.add_argument(
-        '--hybrid',
-        action='store_true',
-        help='Activate hybrid mode for Traffic Manager')
-    argparser.add_argument(
-        '-s', '--seed',
-        metavar='S',
-        type=int,
-        help='Set random device seed and deterministic mode for Traffic Manager')
-    argparser.add_argument(
-        '--seedw',
-        metavar='S',
-        default=0,
-        type=int,
-        help='Set the seed for pedestrians module')
-    argparser.add_argument(
-        '--car-lights-on',
-        action='store_true',
-        default=False,
-        help='Enable automatic car light management')
-    argparser.add_argument(
-        '--hero',
-        action='store_true',
-        default=False,
-        help='Set one of the vehicles as hero')
-    argparser.add_argument(
-        '--respawn',
-        action='store_true',
-        default=False,
-        help='Automatically respawn dormant vehicles (only in large maps)')
-    argparser.add_argument(
-        '--no-rendering',
-        action='store_true',
-        default=False,
-        help='Activate no rendering mode')
-
-    args = argparser.parse_args()
+    args = generate_args()
 
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
@@ -168,19 +61,16 @@ def main():
         traffic_manager.set_global_distance_to_leading_vehicle(2.5)
         if args.respawn:
             traffic_manager.set_respawn_dormant_vehicles(True)
-        if args.hybrid:
-            traffic_manager.set_hybrid_physics_mode(True)
-            traffic_manager.set_hybrid_physics_radius(70.0)
         if args.seed is not None:
             traffic_manager.set_random_device_seed(args.seed)
 
         settings = world.get_settings()
         if not args.asynch:
             traffic_manager.set_synchronous_mode(True)
-            if not settings.synchronous_mode:
+            if not settings.synchronous_mode:   
                 synchronous_master = True
                 settings.synchronous_mode = True
-                settings.fixed_delta_seconds = 0.05
+                settings.fixed_delta_seconds = 0.025
             else:
                 synchronous_master = False
         else:
@@ -193,18 +83,8 @@ def main():
         world.apply_settings(settings)
 
         blueprints = get_actor_blueprints(world, args.filterv, args.generationv)
+        blueprints = [blueprint for blueprint in blueprints if "dreyevr" not in blueprint.id]
         blueprintsWalkers = get_actor_blueprints(world, args.filterw, args.generationw)
-
-        if args.safe:
-            blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
-            blueprints = [x for x in blueprints if not x.id.endswith('microlino')]
-            blueprints = [x for x in blueprints if not x.id.endswith('carlacola')]
-            blueprints = [x for x in blueprints if not x.id.endswith('cybertruck')]
-            blueprints = [x for x in blueprints if not x.id.endswith('t2')]
-            blueprints = [x for x in blueprints if not x.id.endswith('sprinter')]
-            blueprints = [x for x in blueprints if not x.id.endswith('firetruck')]
-            blueprints = [x for x in blueprints if not x.id.endswith('ambulance')]
-
         blueprints = sorted(blueprints, key=lambda bp: bp.id)
 
         spawn_points = world.get_map().get_spawn_points()
@@ -226,7 +106,6 @@ def main():
         # Spawn vehicles
         # --------------
         batch = []
-        hero = args.hero
         for n, transform in enumerate(spawn_points):
             if n >= args.number_of_vehicles:
                 break
@@ -237,11 +116,6 @@ def main():
             if blueprint.has_attribute('driver_id'):
                 driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
                 blueprint.set_attribute('driver_id', driver_id)
-            # if hero:
-            #     blueprint.set_attribute('role_name', 'hero')
-            #     hero = False
-            # else:
-            #     blueprint.set_attribute('role_name', 'autopilot')
 
             # spawn the cars and set their autopilot and light state all together
             batch.append(SpawnActor(blueprint, transform)
@@ -263,8 +137,8 @@ def main():
         # Spawn Walkers
         # -------------
         # some settings
-        percentagePedestriansRunning = 0.0      # how many pedestrians will run
-        percentagePedestriansCrossing = 0.0     # how many pedestrians will walk through the road
+        percentagePedestriansRunning = 0        # how many pedestrians will run?
+        percentagePedestriansCrossing = 100     # how many pedestrians will walk through the road?
         if args.seedw:
             world.set_pedestrians_seed(args.seedw)
             random.seed(args.seedw)
@@ -341,15 +215,49 @@ def main():
 
         print('spawned %d vehicles and %d walkers, press Ctrl+C to exit.' % (len(vehicles_list), len(walkers_list)))
 
-        # Example of how to use Traffic Manager parameters
-        traffic_manager.global_percentage_speed_difference(30.0)
+        # Increase the speed of the spawned and ego vehicle (in autopilot mode)
+        traffic_manager.global_percentage_speed_difference(-50.0)
 
+        # Enable autonomous mode for the ego-vehicle while doing the reading task.
+        DReyeVR_vehicle = find_ego_vehicle(world)
+        if DReyeVR_vehicle is not None:
+            DReyeVR_vehicle.set_autopilot(True, traffic_manager.get_port())
+            print("Successfully set autopilot on ego vehicle")
+
+        # Check for signal to execute TOR and turn traffic light green at traffic signals.
         while True:
             if not args.asynch and synchronous_master:
                 world.tick()
             else:
                 world.wait_for_tick()
 
+            # Turn the traffic signal green
+            if DReyeVR_vehicle.is_at_traffic_light():
+                traffic_light = DReyeVR_vehicle.get_traffic_light()
+                if traffic_light.get_state() == carla.TrafficLightState.Red:
+                    traffic_light.set_state(carla.TrafficLightState.Green)
+                    print(f"Turned traffic light:{traffic_light} to green.")
+
+            # Reading signal file
+            try:
+                # WARNING: Change this file path before execution.
+                f = open("../../CarlaUE4/Content/ConfigFiles/SignalFile.txt", "r")
+                if "1" in f.read():
+                    debug_bol = True
+                    break
+            except:
+                print("Error occured while reading the signal file")
+            finally:
+                f.close()
+                
+        # --------------
+        # Executing the TOR maneouver
+        # --------------
+        # Get all the spwaned vehicle and get the closest vehicle to ego vehicle
+        all_vehicle_actors = world.get_actors(vehicles_list)
+        # Compute physics calculation
+        # Apply leading vehicle abrupt deceleration situation to the closest vehicle.
+        # Get vehicle
     finally:
 
         if not args.asynch and synchronous_master:
@@ -359,7 +267,7 @@ def main():
             settings.fixed_delta_seconds = None
             world.apply_settings(settings)
 
-        print('\ndestroying %d vehicles' % len(vehicles_list))
+        print('\ndestroying %d non-ego vehicles' % len(vehicles_list))
         client.apply_batch([carla.command.DestroyActor(x) for x in vehicles_list])
 
         # stop walker controllers (list is [controller, actor, controller, actor ...])
@@ -370,6 +278,90 @@ def main():
         client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
 
         time.sleep(0.5)
+
+def generate_args():
+    argparser = argparse.ArgumentParser(
+        description=__doc__)
+    argparser.add_argument(
+        '--host',
+        metavar='H',
+        default='127.0.0.1',
+        help='IP of the host server (default: 127.0.0.1)')
+    argparser.add_argument(
+        '-p', '--port',
+        metavar='P',
+        default=2000,
+        type=int,
+        help='TCP port to listen to (default: 2000)')
+    argparser.add_argument(
+        '-n', '--number-of-vehicles',
+        metavar='N',
+        default=60,
+        type=int,
+        help='Number of vehicles (default: 60)')
+    argparser.add_argument(
+        '-w', '--number-of-walkers',
+        metavar='W',
+        default=10,
+        type=int,
+        help='Number of walkers (default: 10)')
+    argparser.add_argument(
+        '--filterv',
+        metavar='PATTERN',
+        default='vehicle.*',
+        help='Filter vehicle model (default: "vehicle.*")')
+    argparser.add_argument(
+        '--generationv',
+        metavar='G',
+        default='All',
+        help='restrict to certain vehicle generation (values: "1","2","All" - default: "All")')
+    argparser.add_argument(
+        '--filterw',
+        metavar='PATTERN',
+        default='walker.pedestrian.*',
+        help='Filter pedestrian type (default: "walker.pedestrian.*")')
+    argparser.add_argument(
+        '--generationw',
+        metavar='G',
+        default='2',
+        help='restrict to certain pedestrian generation (values: "1","2","All" - default: "2")')
+    argparser.add_argument(
+        '--tm-port',
+        metavar='P',
+        default=8000,
+        type=int,
+        help='Port to communicate with TM (default: 8000)')
+    argparser.add_argument(
+        '--asynch',
+        action='store_true',
+        help='Activate asynchronous mode execution')
+    argparser.add_argument(
+        '-s', '--seed',
+        metavar='S',
+        type=int,
+        help='Set random device seed and deterministic mode for Traffic Manager')
+    argparser.add_argument(
+        '--seedw',
+        metavar='S',
+        default=0,
+        type=int,
+        help='Set the seed for pedestrians module')
+    argparser.add_argument(
+        '--car-lights-on',
+        action='store_true',
+        default=False,
+        help='Enable automatic car light management')
+    argparser.add_argument(
+        '--respawn',
+        action='store_true',
+        default=True,
+        help='Automatically respawn dormant vehicles (only in large maps)')
+    argparser.add_argument(
+        '--no-rendering',
+        action='store_true',
+        default=False,
+        help='Activate no rendering mode')
+    return argparser.parse_args()
 
 if __name__ == '__main__':
 

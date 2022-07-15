@@ -61,6 +61,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     // Play sounds
     void PlayGearShiftSound(const float DelayBeforePlay = 0.f) const;
     void PlayTurnSignalSound(const float DelayBeforePlay = 0.f) const;
+    void PlayTORAlertSound(const float DelayBeforePlay = 0.f) const;
 
   protected:
     // Called when the game starts (spawned) or ends (destroyed)
@@ -223,7 +224,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
 
     // Text to Speech
     bool bTTS = false; // WARNING: This should ONLY be modified before starting the program (for now)
-    int32 WPM; // Retrived from the settings file. Default value may be set.
+    int32 WPM; // Retrived from the settings file. Default value may be set in case of reading failure
     std::string TextStdString;
 
 
@@ -243,11 +244,18 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     FString GenerateSentence();
     void STP(); // Will be called in UpdateDash()
     void SetTextSTP(); // Will generate a paragraph from CurrentLines array and set text on HUD.
-
+    int32 EmptyGeneratedTexts = 0; // This will start incerementing once reading task is over
     // Rapid Serial Visual Presentation Technique
     float NextWordInterval = 0.3f;
     void RSVP();
 
+    // Take-Over Requests
+    void SendTORSignal(const FString& signal);      // This method will send signal to PythonAPI to execute TOR
+    void DisplayTORAlert();                         // This will destroy HUD and display TOR alert
+    void ResumeAIcontrol();                         // Handing back control to AI when situation in ODD
+    bool bIsNDRTComplete = false;                   // To stop calling STP() and RSVP()
+    void StopTORAlert();                            // Destory TOR message and stop alert sound
+    class UAudioComponent* TORAlertSound;           // For TOR alert sound
     ////////////////:STEERINGWHEEL:////////////////
     void ConstructSteeringWheel(); // needs to be called in the constructor
     UPROPERTY(Category = Steering, EditDefaultsOnly, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))

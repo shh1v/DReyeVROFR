@@ -121,12 +121,12 @@ def main():
     other_vehicles = []
     try:
         world = client.get_world()
-
+        settings = world.get_settings()
         traffic_manager = client.get_trafficmanager(args.tm_port)
         traffic_manager.set_global_distance_to_leading_vehicle(1.0)
         if args.seed is not None:
             traffic_manager.set_random_device_seed(args.seed)
-
+            
         ego_vehicle = set_DReyeVR_autopilot(world, traffic_manager)
 
         # spawn other vehicles
