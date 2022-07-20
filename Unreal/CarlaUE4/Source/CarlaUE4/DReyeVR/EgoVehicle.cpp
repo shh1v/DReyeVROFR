@@ -638,24 +638,26 @@ void AEgoVehicle::STP()
 void AEgoVehicle::RSVP()
 {
 	if (bIsFirst) {
-		FString Word = TextWordsArray[EndIndex++];
+		FString Word = TextWordsArray[EndIndex];
 		TextDisplay->SetText(Word);
 		FutureTimeStamp = World->GetTimeSeconds() + NextWordInterval + ExtraPause;
 		bIsFirst = false;
+		EndIndex++;
 	}
-	else if (FutureTimeStamp <= World->GetTimeSeconds()) {
-		if (EndIndex >= TextWordsArray.Num())
-		{
-			bIsNDRTComplete = true;
-			DisplayTORAlert();
-		}
-		else if (TextWordsArray.Num() - EndIndex <= ceil(WPM / 6))
+	else if (FutureTimeStamp <= World->GetTimeSeconds() && EndIndex < TextWordsArray.Num()) {
+		if (TextWordsArray.Num() - EndIndex <= ceil(WPM / 6))
 		{
 			SendTORSignal(TEXT("1"));
 		}
-		FString Word = TextWordsArray[EndIndex++];
+		FString Word = TextWordsArray[EndIndex];
 		TextDisplay->SetText(Word);
 		FutureTimeStamp += NextWordInterval;
+		EndIndex++;
+	}
+	if (EndIndex >= TextWordsArray.Num())
+	{
+		bIsNDRTComplete = true;
+		DisplayTORAlert();
 	}
 }
 
@@ -778,10 +780,16 @@ void AEgoVehicle::SetWPM(int32 WPM) {
 
 void AEgoVehicle::DisplayTORAlert()
 {
+	// Making windshield transperant
 	HUD->DestroyComponent();
+
+	// Displaying the TOR alert message
+	TextDisplay->SetRelativeLocation(DashboardLocnInVehicle + FVector(-7, -45, 46.f));
+	TextDisplay->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextCenter);
+	TextDisplay->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
 	TextDisplay->SetWorldSize(9); // scale the font with this
 	TextDisplay->SetTextRenderColor(FColor::Red);
-	TextDisplay->SetText(TEXT("EMERGENCY:\nTake Manual Control"));
+	TextDisplay->SetText(TEXT("EMERGENCY\nTake Manual Control"));
 }
 void AEgoVehicle::ResumeAIcontrol()
 {
