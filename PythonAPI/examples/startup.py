@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2021 Computer Vision Center (CVC) at the Universitat Autonoma de
-# Barcelona (UAB).
-#
-# This work is licensed under the terms of the MIT license.
-# For a copy, see <https://opensource.org/licenses/MIT>.
+###############################################
+# Copyright (c) Shiv Patel, 2022
+# BC, Canada.
+# The University of British Columbia, Okanagan
+###############################################
 
 """Example script to generate traffic in the simulation"""
 
@@ -77,12 +77,6 @@ def main():
             print("You are currently in asynchronous mode. If this is a traffic simulation, \
             you could experience some issues. If it's not working correctly, switch to synchronous \
             mode by using traffic_manager.set_synchronous_mode(True)")
-
-        # weather = carla.WeatherParameters(cloudiness=80.0,precipitation=30.0,sun_altitude_angle=70.0)
-        normal_weather = world.get_weather()
-        weather = carla.WeatherParameters(fog_density=80, fog_distance=1, fog_falloff=1)
-        world.set_weather(weather)
-        print(world.get_weather())
 
         if args.no_rendering:
             settings.no_rendering_mode = True
@@ -242,44 +236,22 @@ def main():
                 if traffic_light.get_state() == carla.TrafficLightState.Red:
                     traffic_light.set_state(carla.TrafficLightState.Green)
             # Reading signal file
-            # try:
-            #     # WARNING: Change this file path before execution.
-            #     f = open("E:/DReyeVR/carla/Build/UE4Carla/0.9.13-9-g7fc857588/WindowsNoEditor/CarlaUE4/Content/ConfigFiles/SignalFile.txt", "r")
-            #     if "1" in f.read():
-            #         break
-            #     f.close()
-            # except:
-            #     print("Error occured while reading the signal file")
+            try:
+                # WARNING: Change this file path before execution.
+                f = open("E:/DReyeVR/carla/Build/UE4Carla/0.9.13-11-g0a6c2eb9a-dirty/WindowsNoEditor/CarlaUE4/Content/ConfigFiles/SignalFile.txt", "r")
+                if "1" in f.read():
+                    break
+                f.close()
+            except:
+                print("Error occured while reading the signal file")
 
         # --------------
         # Executing the TOR maneouver [Execution time budget: 8 seconds]
         # TOR Settings:
-        leading_vehicle_distance = 10.0 # meters
         # --------------
 
-        # Get all the spwaned vehicle and get the closest vehicle to ego vehicle
-        all_vehicle_actors = world.get_actors(vehicles_list) # WARNING: This also contains ego-vehicle
-        world.tick()
-
-        # Identify the closest vehicle to the ego vehicle
-        DReyeVR_loc = DReyeVR_vehicle.get_location()
-        closest_vehicle = all_vehicle_actors[0]
-        for vehicle in all_vehicle_actors:
-            vehicle_loc = vehicle.get_location()
-            if vehicle.type_id != DReyeVR_vehicle.type_id and DReyeVR_loc.distance(vehicle_loc) < DReyeVR_loc.distance(closest_vehicle.get_location):
-                closest_vehicle = vehicle
-        world.tick()
-
-        # Apply leading vehicle abrupt deceleration situation to the closest vehicle.
-            # Case 1: closest_vehicle.get_location > DReye_loc + leading_vehicle_distance
-                    # Case 1.1: The vehicle is on the right of DReyeVR
-                    # Case 1.2: The vehicle is in the same lane
-                    # Case 1.3: The vehicle is on the left of DReyeVR
-                # Case 2: closest_vehicle.get_location < DReye_loc + leading_vehicle_distance
-                    # Case 2.1: The vehicle is on sthe right of DReyeVR
-                    # Case 2.2: The vehicle is in the same lane
-                    # Case 2.3: The vehicle is on the left of DReyeVR
-            # Identifitying in which lane is the vehicle in
+        # Get waypoint
+        print(world.get_map().get_waypoint(DReyeVR_vehicle.get_location()).road_id)
         
         # Call world.tick() to avoid the simulator from halt
         while True:
@@ -302,12 +274,14 @@ def main():
         # stop walker controllers (list is [controller, actor, controller, actor ...])
         for i in range(0, len(all_id), 2):
             all_actors[i].stop()
-
+        
         print('\ndestroying %d walkers' % len(walkers_list))
         client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
 
-        print('\nSetting normal weather')
-        world.set_weather(normal_weather)
+        if DReyeVR_vehicle is not None:
+            DReyeVR_vehicle.set_autopilot(False, traffic_manager.get_port())
+            print("Successfully set manual control on ego vehicle")
+
         time.sleep(0.5)
 
 def generate_args():

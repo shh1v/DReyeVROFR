@@ -256,6 +256,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     bool bIsNDRTComplete = false;                   // To stop calling STP() and RSVP()
     void StopTORAlert();                            // Destory TOR message and stop alert sound
     class UAudioComponent* TORAlertSound;           // For TOR alert sound
+
     ////////////////:STEERINGWHEEL:////////////////
     void ConstructSteeringWheel(); // needs to be called in the constructor
     UPROPERTY(Category = Steering, EditDefaultsOnly, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
