@@ -206,6 +206,8 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     // Get text from local text and settings file
     void RetriveText();
     void ReadSettingsFile();
+    void WriteSignalFile(const FString& signal);        // Used to send a signal to PythonAPI
+    int ReadSignalFile();                               // Reads the Signal File
     TArray<FString> TextWordsArray;
     void SetWPM(int32 WPM);
 
@@ -216,6 +218,7 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     class UStaticMeshComponent *HUD;
     void ConstructInterface();
     void EnableTextToSpeech();
+    bool bStartNDRT = false;
     bool bThreadInit = false;
     bool bRSVP = false; // WARNING: This should ONLY be modified before starting the program (for now)
     bool bIsFirst = true;
@@ -250,7 +253,6 @@ class CARLAUE4_API AEgoVehicle : public ACarlaWheeledVehicle
     void RSVP();
 
     // Take-Over Requests
-    void SendTORSignal(const FString& signal);      // This method will send signal to PythonAPI to execute TOR
     void DisplayTORAlert();                         // This will destroy HUD and display TOR alert
     void ResumeAIcontrol();                         // Handing back control to AI when situation in ODD
     bool bIsNDRTComplete = false;                   // To stop calling STP() and RSVP()

@@ -8,15 +8,24 @@
 
 """Example script to generate traffic in the simulation"""
 
+from asyncore import write
 import time
 import carla
-
+from TOR_implementations.TOR_utility import wait
 from carla import VehicleLightState as vls
 from DReyeVR_utils import find_ego_vehicle
 
 import argparse
 import logging
 from numpy import random
+
+# Importing TOR scenerio implementations
+import TOR_implementations.LVAD as LVAD
+import TOR_implementations.ExtremeWeather as ExtremeWeather
+import TOR_implementations.CSA as CSA
+import TOR_implementations.HumanCrossing as HumanCrosssing
+
+SIGNAL_FILE_PATH = "E:/DReyeVR/carla/Build/UE4Carla/CARLA_0.9.13-13-g367980aa6-dirty/WindowsNoEditor/CarlaUE4/Content/ConfigFiles/SignalFile.txt"
 
 def get_actor_blueprints(world, filter, generation):
     bps = world.get_blueprint_library().filter(filter)
@@ -41,9 +50,10 @@ def get_actor_blueprints(world, filter, generation):
     except:
         print("   Warning! Actor Generation is not valid. No actor will be spawned.")
         return []
+
+
 def main():
     args = generate_args()
-
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
     vehicles_list = []
@@ -67,7 +77,7 @@ def main():
         settings = world.get_settings()
         if not args.asynch:
             traffic_manager.set_synchronous_mode(True)
-            if not settings.synchronous_mode:   
+            if not settings.synchronous_mode:
                 synchronous_master = True
                 settings.synchronous_mode = True
                 settings.fixed_delta_seconds = 1/40.0
@@ -119,7 +129,7 @@ def main():
 
             # spawn the cars and set their autopilot and light state all together
             batch.append(SpawnActor(blueprint, transform)
-                .then(SetAutopilot(FutureActor, True, traffic_manager.get_port())))
+                         .then(SetAutopilot(FutureActor, True, traffic_manager.get_port())))
 
         for response in client.apply_batch_sync(batch, synchronous_master):
             if response.error:
@@ -222,7 +232,11 @@ def main():
         DReyeVR_vehicle = find_ego_vehicle(world)
         if DReyeVR_vehicle is not None:
             DReyeVR_vehicle.set_autopilot(True, traffic_manager.get_port())
-            print("Successfully set autopilot on ego vehicle")
+            print("Successfully set autopilot on ego vehicle.")
+
+        # Give a signal to start reading comprehension task
+        write_signal_file(SIGNAL_FILE_PATH, 0)
+        print("Starting reading comprehension task.")
 
         # Check for signal to execute TOR and turn traffic light green at traffic signals.
         while True:
@@ -230,37 +244,50 @@ def main():
                 world.tick()
             else:
                 world.wait_for_tick()
-            # Turn all the signals green if the ego vehicle is waiting at a traffic signal
-            if DReyeVR_vehicle.is_at_traffic_light():
-                traffic_light = DReyeVR_vehicle.get_traffic_light()
-                if traffic_light.get_state() == carla.TrafficLightState.Red:
-                    traffic_light.set_state(carla.TrafficLightState.Green)
-            # Reading signal file
-            try:
-                # WARNING: Change this file path before execution.
-                f = open("E:/DReyeVR/carla/Build/UE4Carla/0.9.13-11-g0a6c2eb9a-dirty/WindowsNoEditor/CarlaUE4/Content/ConfigFiles/SignalFile.txt", "r")
-                if "1" in f.read():
-                    break
-                f.close()
-            except:
-                print("Error occured while reading the signal file")
 
-        # --------------
-        # Executing the TOR maneouver [Execution time budget: 8 seconds]
-        # TOR Settings:
-        # --------------
+            turn_traffic_light_to(DReyeVR_vehicle, carla.TrafficLightState.Red, carla.TrafficLightState.Green)
+    
+            # Check for permission to execute TOR scenerio
+            if read_signal_file(SIGNAL_FILE_PATH) == 1:
+                break
 
-        # Get waypoint
-        print(world.get_map().get_waypoint(DReyeVR_vehicle.get_location()).road_id)
-        
-        # Call world.tick() to avoid the simulator from halt
-        while True:
-            if not args.asynch and synchronous_master:
-                world.tick()
-            else:
-                world.wait_for_tick()
+        # Execute TOR scenerio
+        # 1: LVAD, 2: EW, 3: CSA, 4: HCR
+        print("TOR scenerio choosen: ", str(args.tor_scenario))
+        if args.tor_scenario == 1:
+            print("Leading Vehicle Abrupt Deceleration scenario executed.")
+            pass
+        elif args.tor_scenario == 2:
+            print("Extreme Weather scenario executed.")
+            # Wait for the TOR to be issued
+            wait_for_TOR(world)
+            print("TOR issued")
+
+            # Generate Extreme weather conditions
+            old_weather = ExtremeWeather.generate_fog(world)
+            print("Extreme weather set")
+
+            # Disable autopilot once TOR is issued
+            DReyeVR_vehicle.set_autopilot(False, args.tm_port)
+            print("Disabling autopilot")
+            world.tick()
+
+            # Revert back to original weather after 10 seconds
+            ExtremeWeather.set_to_weather(world, old_weather, 10)
+        elif args.tor_scenario == 3:
+            print("Construction Site Ahead scenario executed.")
+            pass
+        else:
+            print("Human Crossing scenario executed.")
+            pass
+
+        # Once original conditions are attained, enable autopilot
+        DReyeVR_vehicle.set_autopilot(True, args.tm_port)
+        print("Enabling autopilot back again")
+        # for 5 seconds than exit
+        wait(5)
+
     finally:
-
         if not args.asynch and synchronous_master:
             settings = world.get_settings()
             settings.synchronous_mode = False
@@ -274,7 +301,7 @@ def main():
         # stop walker controllers (list is [controller, actor, controller, actor ...])
         for i in range(0, len(all_id), 2):
             all_actors[i].stop()
-        
+
         print('\ndestroying %d walkers' % len(walkers_list))
         client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
 
@@ -283,6 +310,33 @@ def main():
             print("Successfully set manual control on ego vehicle")
 
         time.sleep(0.5)
+
+
+def turn_traffic_light_to(DReyeVR_vehicle, from_light_state, to_light_state):
+    if DReyeVR_vehicle.is_at_traffic_light():
+        traffic_light = DReyeVR_vehicle.get_traffic_light()
+        if traffic_light.get_state() == from_light_state:
+            traffic_light.set_state(to_light_state)
+
+
+def write_signal_file(file_path, signal):
+    try:
+        f = open(file_path, "w")
+        f.write(str(signal))
+        f.close()
+    except:
+        print("Error occured while opening/writing to the signal file")
+
+
+def read_signal_file(file_path):
+    try:
+        f = open(file_path, "r")
+        signal = int(f.read())
+        f.close()
+        return signal
+    except:
+        print("Error occured while opening/reading the signal file")
+
 
 def generate_args():
     argparser = argparse.ArgumentParser(
@@ -366,7 +420,18 @@ def generate_args():
         action='store_true',
         default=False,
         help='Activate no rendering mode')
+    argparser.add_argument(
+        '--tor-scenario',
+        action='store_true',
+        default=2,
+        help='1: LVAD, 2: EW, 3: CSA, 4: HCR')
     return argparser.parse_args()
+
+
+def wait_for_TOR(world):
+    while read_signal_file(SIGNAL_FILE_PATH) != 2:
+        world.tick()
+
 
 if __name__ == '__main__':
 

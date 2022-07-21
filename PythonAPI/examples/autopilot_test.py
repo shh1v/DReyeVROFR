@@ -20,7 +20,7 @@ def main():
   DReyeVR_vehicle = find_ego_vehicle(world)
 
   # Increase the speed of the spawned and ego vehicle (in autopilot mode)
-  traffic_manager.global_percentage_speed_difference(0)
+  traffic_manager.global_percentage_speed_difference(-200.0)
 
   DReyeVR_vehicle.set_autopilot(True, 8000)
   wait(world, 5) # wait 5 seconds

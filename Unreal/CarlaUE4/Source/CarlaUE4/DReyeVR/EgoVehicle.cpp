@@ -38,6 +38,9 @@ AEgoVehicle::AEgoVehicle(const FObjectInitializer& ObjectInitializer) : Super(Ob
 	// Initialize mirrors
 	ConstructMirrors();
 
+	// Reset the Signal File to an invalid/Illogical communication
+	WriteSignalFile("5");
+
 	// Retrive text from local files to display on HUD
 	RetriveText();
 
@@ -161,6 +164,12 @@ void AEgoVehicle::Tick(float DeltaSeconds)
 
 	// Play sound that requires constant ticking
 	TickSounds();
+
+	// DEBUG: Autopilot Enabled/Disabled
+	const FString SignalFilePath = FPaths::ProjectContentDir() / TEXT("ConfigFiles/AutopilotLog.txt");
+	FString LogString = AI_Player->IsAutopilotEnabled() ? "True\n" : "False\n";
+	FFileHelper::SaveStringToFile(LogString, *SignalFilePath, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), EFileWrite::FILEWRITE_Append);
+
 }
 
 /// ========================================== ///
@@ -593,7 +602,14 @@ void AEgoVehicle::UpdateDash()
 	else
 		GearShifter->SetText(FText::FromString("D"));
 
-	if (!bIsNDRTComplete) {
+	// Reading Signal File to determine whether to start NDRT or not
+	if (!bStartNDRT && ReadSignalFile() == 0)
+	{
+		bStartNDRT = true;
+	}
+
+	// Checking (1) if NDRT is started, (2) NDRT is not ended
+	if (bStartNDRT && !bIsNDRTComplete) {
 		// Enable Text-to-Speech if wanted and if not enabled yet
 		if (bTTS && !bThreadInit) {
 			EnableTextToSpeech();
@@ -605,7 +621,8 @@ void AEgoVehicle::UpdateDash()
 		else
 			STP();
 	}
-	else {
+	if (bIsNDRTComplete)
+	{
 		// This means that the NDRT is complete and play the TOR alert sound
 		PlayTORAlertSound();
 	}
@@ -632,6 +649,8 @@ void AEgoVehicle::STP()
 	if (EmptyGeneratedTexts >= 4) {
 		bIsNDRTComplete = true;
 		DisplayTORAlert();
+		// Send Signal to PythonAPI that TOR is issued
+		WriteSignalFile("2");
 	}
 }
 
@@ -647,7 +666,7 @@ void AEgoVehicle::RSVP()
 	else if (FutureTimeStamp <= World->GetTimeSeconds() && EndIndex < TextWordsArray.Num()) {
 		if (TextWordsArray.Num() - EndIndex <= ceil(WPM / 6))
 		{
-			SendTORSignal(TEXT("1"));
+			WriteSignalFile(TEXT("1"));
 		}
 		FString Word = TextWordsArray[EndIndex];
 		TextDisplay->SetText(Word);
@@ -658,6 +677,8 @@ void AEgoVehicle::RSVP()
 	{
 		bIsNDRTComplete = true;
 		DisplayTORAlert();
+		// Send Signal to PythonAPI that TOR is issued
+		WriteSignalFile("2");
 	}
 }
 
@@ -668,7 +689,7 @@ FString AEgoVehicle::GenerateSentence()
 	while (EndIndex < TextWordsArray.Num()) {
 		if (TextWordsArray.Num() - EndIndex <= ceil(WPM / 6))
 		{
-			SendTORSignal(TEXT("1"));
+			WriteSignalFile(TEXT("1"));
 		}
 		FString Word = TextWordsArray[EndIndex];
 		CharacterSum += Word.Len();
@@ -738,9 +759,9 @@ void AEgoVehicle::EnableTextToSpeech() {
 }
 
 void AEgoVehicle::ReadSettingsFile() {
-	const FString RSVPSettings = FPaths::ProjectContentDir() / TEXT("ConfigFiles/config.txt");
+	const FString Settings = FPaths::ProjectContentDir() / TEXT("ConfigFiles/config.txt");
 	FString Result;
-	FFileHelper::LoadFileToString(Result, *RSVPSettings);
+	FFileHelper::LoadFileToString(Result, *Settings);
 
 	// Reading file: RSVP behaviour should be enabled or not
 	FString RSVP = UKismetStringLibrary::GetSubstring(Result, Result.Find(TEXT("RSVP:"), ESearchCase::IgnoreCase, ESearchDir::FromStart) + 6, 1);
@@ -795,11 +816,20 @@ void AEgoVehicle::ResumeAIcontrol()
 {
 	/* Left to implement. */
 }
-void AEgoVehicle::SendTORSignal(const FString& signal)
+void AEgoVehicle::WriteSignalFile(const FString& signal)
 {
 	const FString SignalFilePath = FPaths::ProjectContentDir() / TEXT("ConfigFiles/SignalFile.txt");
 	FFileHelper::SaveStringToFile(signal, *SignalFilePath, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get());
 }
+
+int32 AEgoVehicle::ReadSignalFile()
+{
+	const FString SignalFilePath = FPaths::ProjectContentDir() / TEXT("ConfigFiles/SignalFile.txt");
+	FString Result;
+	FFileHelper::LoadFileToString(Result, *SignalFilePath);
+	return UKismetStringLibrary::Conv_StringToInt(Result);
+}
+
 /// ========================================== ///
 /// -----------------:WHEEL:------------------ ///
 /// ========================================== ///
